@@ -37,10 +37,11 @@ function showError(message) {
 
 async function boot() {
   installGlobalGuards();
-  const { viewer, terrainName, imageryName } = await createViewer(setLoading);
+  const { viewer, terrainName, imageryName, stylized } = await createViewer(setLoading);
 
-  // Phase 6 — auto-fallback if the imagery provider goes down / rate-limits.
-  installImageryResilience(viewer);
+  // Auto-fallback if the imagery provider goes down (imagery mode only;
+  // stylized mode has no imagery layer to guard).
+  if (!stylized) installImageryResilience(viewer);
 
   // Phase 1 — navigation & sharing.
   createSearchBox(viewer);

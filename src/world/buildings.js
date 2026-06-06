@@ -14,6 +14,7 @@ import {
   Cartographic,
 } from 'cesium';
 import { buildingHeights } from './osmParse.js';
+import { exaggerate } from './heights.js';
 
 const PALETTE = [
   '#b9b2a6', '#c4bcae', '#a89f93', '#cbb9a0', '#b0a99c',
@@ -42,7 +43,8 @@ function groundHeight(scene, ring) {
     );
     if (h != null && h < min) min = h;
   }
-  return Number.isFinite(min) ? min : 0;
+  // Match the exaggerated render surface so buildings don't float/sink.
+  return exaggerate(Number.isFinite(min) ? min : 0);
 }
 
 /**
