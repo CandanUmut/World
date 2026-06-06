@@ -94,3 +94,24 @@ export function landuseColor(tags = {}) {
   if (tags.landuse === 'farmland' || tags.landuse === 'orchard') return [0.55, 0.5, 0.28, 0.35];
   return null;
 }
+
+/**
+ * Stylized, fairly opaque ground-fill color for a land-use/landcover polygon,
+ * draped on terrain to paint the world by OSM land use (the "old-game" base).
+ * Returns [r,g,b,a] or null if this polygon isn't a ground surface we paint.
+ */
+export function groundFillColor(tags = {}) {
+  if (tags.natural === 'wood' || tags.landuse === 'forest') return [0.27, 0.42, 0.22, 0.92];
+  if (tags.leisure === 'park' || tags.leisure === 'garden') return [0.40, 0.58, 0.30, 0.9];
+  if (tags.landuse === 'grass' || tags.landuse === 'meadow' || tags.leisure === 'pitch')
+    return [0.46, 0.62, 0.34, 0.88];
+  if (tags.landuse === 'farmland') return [0.66, 0.6, 0.34, 0.85];
+  if (tags.landuse === 'orchard') return [0.5, 0.58, 0.3, 0.85];
+  if (tags.landuse === 'cemetery') return [0.42, 0.52, 0.36, 0.85];
+  // Urban land use → muted gray-tan so cities read as built-up.
+  if (['residential', 'suburb', 'neighbourhood'].includes(tags.landuse))
+    return [0.74, 0.71, 0.64, 0.8];
+  if (['commercial', 'retail'].includes(tags.landuse)) return [0.76, 0.72, 0.66, 0.8];
+  if (['industrial'].includes(tags.landuse)) return [0.68, 0.66, 0.64, 0.8];
+  return null;
+}

@@ -16,7 +16,7 @@ import {
   Color,
   Cartesian3,
 } from 'cesium';
-import { roadStyle, isWater } from './osmParse.js';
+import { roadStyle, isWater, groundFillColor } from './osmParse.js';
 
 function toColor([r, g, b, a]) {
   return new Color(r, g, b, a);
@@ -50,6 +50,41 @@ export function buildRoads(scene, ways) {
   return new GroundPolylinePrimitive({
     geometryInstances: instances,
     appearance: new PolylineColorAppearance(),
+    asynchronous: true,
+  });
+}
+
+/**
+ * Stylized land-use ground fill: paint the terrain by OSM land use (greens for
+ * parks/forest/grass, tan for farmland, muted gray for urban). Ground-classified
+ * so it drapes crisply over real terrain — this is the stylized "base ground".
+ */
+export function buildLanduse(scene, ways) {
+  const instances = [];
+  for (const w of ways) {
+    if (w._poly === false) continue;
+    const rgba = groundFillColor(w.tags || {});
+    if (!rgba) continue;
+    const ring = w.geometry?.filter((p) => p && p.lat != null);
+    if (!ring || ring.length < 3) continue;
+    const positions = Cartesian3.fromDegreesArray(ring.flatMap((p) => [p.lon, p.lat]));
+    let geometry;
+    try {
+      geometry = new PolygonGeometry({ polygonHierarchy: new PolygonHierarchy(positions) });
+    } catch {
+      continue;
+    }
+    instances.push(
+      new GeometryInstance({
+        geometry,
+        attributes: { color: ColorGeometryInstanceAttribute.fromColor(new Color(...rgba)) },
+      }),
+    );
+  }
+  if (!instances.length) return null;
+  return new GroundPrimitive({
+    geometryInstances: instances,
+    appearance: new PerInstanceColorAppearance({ flat: true, translucent: true }),
     asynchronous: true,
   });
 }

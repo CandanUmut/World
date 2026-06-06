@@ -26,8 +26,9 @@ export function createVehicleBar(manager, vehicles) {
         btn.className = 'veh-btn';
         btn.innerHTML = `<span class="veh-icon">${v.icon}</span><span>${v.label}</span>`;
         btn.title = `Get in the ${v.label.toLowerCase()} here`;
-        btn.addEventListener('click', () => {
-          manager.enter(v.cls);
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          await manager.enter(v.cls); // resolves after the descend transition
           render();
         });
         bar.appendChild(btn);

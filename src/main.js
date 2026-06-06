@@ -14,12 +14,14 @@ import { createBookmarks } from './ui/bookmarks.js';
 import { initRegionLoader } from './world/regionLoader.js';
 import { createVehicleManager } from './vehicles/vehicleManager.js';
 import { createVehicleBar } from './ui/vehicleBar.js';
+import { Walker } from './vehicles/walk.js';
 import { Plane } from './vehicles/plane.js';
 import { Car } from './vehicles/car.js';
 import { Ship } from './vehicles/ship.js';
 import { createEnvironment } from './world/sky.js';
 import { createBirds } from './world/birds.js';
 import { createSettings } from './ui/settings.js';
+import { createPlaces } from './ui/places.js';
 import { maybeShowOnboarding } from './ui/onboarding.js';
 import { installImageryResilience, installGlobalGuards } from './world/resilience.js';
 
@@ -37,10 +39,11 @@ function showError(message) {
 
 async function boot() {
   installGlobalGuards();
-  const { viewer, terrainName, imageryName } = await createViewer(setLoading);
+  const { viewer, terrainName, imageryName, stylized } = await createViewer(setLoading);
 
-  // Phase 6 — auto-fallback if the imagery provider goes down / rate-limits.
-  installImageryResilience(viewer);
+  // Auto-fallback if the imagery provider goes down (imagery mode only;
+  // stylized mode has no imagery layer to guard).
+  if (!stylized) installImageryResilience(viewer);
 
   // Phase 1 — navigation & sharing.
   createSearchBox(viewer);
@@ -53,6 +56,7 @@ async function boot() {
   // Phase 3 & 4 — vehicles: fly, drive and sail the real world.
   const vehicleManager = createVehicleManager(viewer);
   createVehicleBar(vehicleManager, [
+    { label: 'Walk', icon: '🚶', cls: Walker },
     { label: 'Plane', icon: '✈', cls: Plane },
     { label: 'Car', icon: '🚗', cls: Car },
     { label: 'Ship', icon: '🚢', cls: Ship },
@@ -62,6 +66,9 @@ async function boot() {
   const environment = createEnvironment(viewer);
   const birds = createBirds(viewer);
   createSettings(viewer, environment, birds, { terrainName, imageryName });
+
+  // P3 — famous-places menu + in-world landmark labels (exploring hooks).
+  createPlaces(viewer);
 
   // Reveal the globe once the first frame renders.
   const remove = viewer.scene.postRender.addEventListener(() => {
