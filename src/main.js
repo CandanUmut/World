@@ -8,6 +8,7 @@ import { createViewer } from './viewer.js';
 import { syncUrlToCamera } from './util/viewState.js';
 import { createSearchBox } from './ui/searchBox.js';
 import { createBookmarks } from './ui/bookmarks.js';
+import { initRegionLoader } from './world/regionLoader.js';
 import { toast } from './ui/toast.js';
 
 const loadingOverlay = document.getElementById('loadingOverlay');
@@ -29,6 +30,9 @@ async function boot() {
   createSearchBox(viewer);
   createBookmarks(viewer);
   syncUrlToCamera(viewer);
+
+  // Phase 2 — world detail (buildings, roads, water, trees) streamed per-region.
+  initRegionLoader(viewer).catch((err) => console.error('[main] region loader', err));
 
   // Reveal the globe once the first frame renders.
   const remove = viewer.scene.postRender.addEventListener(() => {
