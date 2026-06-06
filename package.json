@@ -10,7 +10,10 @@
     "preview": "vite preview --host"
   },
   "dependencies": {
-    "cesium": "^1.130.0"
+    "@mapbox/vector-tile": "^2.0.5",
+    "cesium": "^1.130.0",
+    "pbf": "^4.0.2",
+    "pmtiles": "^4.4.1"
   },
   "devDependencies": {
     "vite": "^6.3.5",
