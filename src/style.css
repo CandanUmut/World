@@ -332,3 +332,103 @@ body {
 .toast-error {
   background: rgba(120, 36, 36, 0.96);
 }
+
+/* ======================================================================
+   Phase 3 — HUD & vehicle selector
+   ====================================================================== */
+
+#vehicleBar {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  z-index: 30;
+}
+.veh-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--ui-bg);
+  color: var(--ui-fg);
+  font-size: 14px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4);
+}
+.veh-btn:hover {
+  border-color: var(--accent);
+}
+.veh-icon {
+  font-size: 17px;
+}
+.veh-exit {
+  background: rgba(120, 40, 40, 0.85);
+  border-color: rgba(255, 140, 140, 0.4);
+}
+
+#hud {
+  position: absolute;
+  left: 18px;
+  bottom: 22px;
+  z-index: 30;
+  color: var(--ui-fg);
+  background: var(--ui-bg);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 12px 14px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4);
+  min-width: 230px;
+}
+.hud-grid {
+  display: flex;
+  gap: 18px;
+}
+.hud-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.hud-val {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+.hud-lbl {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9aa7b6;
+}
+.hud-throttle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.hud-throttle-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+#hudThrottleFill {
+  height: 100%;
+  width: 50%;
+  background: linear-gradient(90deg, #4ea1ff, #7ce0ff);
+  transition: width 0.1s linear;
+}
+.hud-hint {
+  margin-top: 10px;
+  font-size: 11px;
+  color: #8b97a6;
+  max-width: 240px;
+  line-height: 1.4;
+}

@@ -9,6 +9,9 @@ import { syncUrlToCamera } from './util/viewState.js';
 import { createSearchBox } from './ui/searchBox.js';
 import { createBookmarks } from './ui/bookmarks.js';
 import { initRegionLoader } from './world/regionLoader.js';
+import { createVehicleManager } from './vehicles/vehicleManager.js';
+import { createVehicleBar } from './ui/vehicleBar.js';
+import { Plane } from './vehicles/plane.js';
 import { toast } from './ui/toast.js';
 
 const loadingOverlay = document.getElementById('loadingOverlay');
@@ -33,6 +36,10 @@ async function boot() {
 
   // Phase 2 — world detail (buildings, roads, water, trees) streamed per-region.
   initRegionLoader(viewer).catch((err) => console.error('[main] region loader', err));
+
+  // Phase 3 — flight (vehicle framework; car & ship join in Phase 4).
+  const vehicleManager = createVehicleManager(viewer);
+  createVehicleBar(vehicleManager, [{ label: 'Plane', icon: '✈', cls: Plane }]);
 
   // Reveal the globe once the first frame renders.
   const remove = viewer.scene.postRender.addEventListener(() => {
