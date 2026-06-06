@@ -6,9 +6,19 @@ places. **100% free to build and to run for everyone:** a static site on GitHub
 Pages using only free / open data. No paid APIs, no billing accounts, no API
 key required in the default configuration. Built on [CesiumJS](https://cesium.com/platform/cesiumjs/).
 
-> **Status: Phase 0 complete** — the real globe renders with real terrain
-> relief, satellite imagery, atmosphere and sun lighting, with correct
-> attribution and no API key.
+> **Status: all phases complete (0–6).** Explore the real globe, search and fly
+> anywhere, see real buildings/roads/water/trees stream in, and fly/drive/sail
+> with engine audio, time-of-day and weather — keyless, free, static-hostable.
+
+## Controls
+
+- **Search** (top): type a place, Enter or click a result to fly there.
+- **★** saved places · **⚙** settings (sound, time of day, weather, quality).
+- **Vehicles** (bottom): get in a Plane / Car / Ship at your current location.
+  - **Plane:** `W`/`S` throttle · `↑`/`↓` pitch · `←`/`→` roll · `A`/`D` rudder
+  - **Car:** `W`/`S` accelerate/brake · `←`/`→` steer
+  - **Ship:** `W`/`S` throttle · `←`/`→` steer
+  - `C` switch chase/cockpit camera · `V` or `Esc` to exit.
 
 ## Quick start
 
@@ -86,12 +96,27 @@ Attribution is mandatory and always visible via Cesium's built-in credit display
 - **Sentinel-2 cloudless** — by EOX IT Services GmbH; contains modified Copernicus Sentinel data ([s2maps.eu](https://s2maps.eu)); CC BY-NC-SA 4.0 with attribution
 - **OpenStreetMap** — © OpenStreetMap contributors, [ODbL](https://www.openstreetmap.org/copyright)
 
-## Roadmap
+## Resilience & free-usage hygiene
+
+- **Auto-fallback imagery:** if the active imagery provider starts failing
+  wholesale, the app switches to the next free provider in the chain
+  (Sentinel-2 → Esri → OSM) automatically.
+- **Graceful degradation:** terrain falls back to a flat ellipsoid if its
+  provider is unavailable; Overpass uses endpoint rotation + exponential
+  back-off; global guards swallow stray fetch failures so a bad request never
+  white-screens the app.
+- **Polite to free services:** request pacing, per-tile caching, fetch-only
+  -near-the-player streaming, and tile budgets.
+- **Optional tokens:** if you add a Cesium ion token, restrict it by
+  **referrer/origin** in the ion dashboard so it can't be reused elsewhere. The
+  app never requires one.
+
+## Roadmap (all complete)
 
 - **Phase 0 — Globe & free data stack** ✅
-- **Phase 1 — Navigate & visit places** (Nominatim search, fly-to, shareable URLs, bookmarks)
-- **Phase 2 — World detail** (3D buildings, OSM roads/water/land use, procedural trees)
-- **Phase 3 — Flight** (arcade flight model, HUD)
-- **Phase 4 — Driving & sailing**
-- **Phase 5 — Living world** (time, weather, ambient life, audio)
-- **Phase 6 — Hardening & ship** (resilience, performance, free-usage hygiene)
+- **Phase 1 — Navigate & visit places** ✅ (Nominatim search, fly-to, shareable URLs, bookmarks)
+- **Phase 2 — World detail** ✅ (3D buildings, OSM roads/water/land use, procedural trees)
+- **Phase 3 — Flight** ✅ (arcade flight model, HUD)
+- **Phase 4 — Driving & sailing** ✅
+- **Phase 5 — Living world** ✅ (time, weather, ambient life, audio)
+- **Phase 6 — Hardening & ship** ✅ (resilience, performance, free-usage hygiene)

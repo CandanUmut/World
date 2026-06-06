@@ -21,6 +21,7 @@ import { createEnvironment } from './world/sky.js';
 import { createBirds } from './world/birds.js';
 import { createSettings } from './ui/settings.js';
 import { maybeShowOnboarding } from './ui/onboarding.js';
+import { installImageryResilience, installGlobalGuards } from './world/resilience.js';
 
 const loadingOverlay = document.getElementById('loadingOverlay');
 const loadingText = document.getElementById('loadingText');
@@ -35,7 +36,11 @@ function showError(message) {
 }
 
 async function boot() {
+  installGlobalGuards();
   const { viewer, terrainName, imageryName } = await createViewer(setLoading);
+
+  // Phase 6 — auto-fallback if the imagery provider goes down / rate-limits.
+  installImageryResilience(viewer);
 
   // Phase 1 — navigation & sharing.
   createSearchBox(viewer);

@@ -57,6 +57,11 @@ export async function createViewer(onStatus = () => {}) {
   globe.depthTestAgainstTerrain = true;
   scene.backgroundColor = Color.fromCssColorString('#01030a');
 
+  // Performance/free-service hygiene: a generous terrain tile cache reduces
+  // re-fetches, and not preloading siblings keeps requests lean.
+  globe.tileCacheSize = 220;
+  globe.preloadSiblings = false;
+
   // Sightseeing-tuned camera: gentle inertia, sensible zoom limits.
   const ctrl = scene.screenSpaceCameraController;
   ctrl.inertiaSpin = 0.92;
