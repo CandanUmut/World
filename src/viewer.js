@@ -7,7 +7,7 @@
  * trees) is drawn on top crisply. A low oblique default camera makes it read as
  * 3D immediately. `?mode=imagery` restores the old photoreal base.
  */
-import { Viewer, Cartesian3, Math as CesiumMath, Color } from 'cesium';
+import { Viewer, Cartesian3, Math as CesiumMath, Color, Credit } from 'cesium';
 
 import { config } from './config.js';
 import { configureIon, createTerrainProvider, createImageryProvider } from './dataSources.js';
@@ -102,6 +102,19 @@ export async function createViewer(onStatus = () => {}) {
           },
         },
   );
+
+  // Mandatory OSM attribution (ODbL). In stylized mode there is no imagery
+  // layer to carry it, so add it as a persistent static credit. Never remove.
+  try {
+    scene.frameState.creditDisplay.addStaticCredit(
+      new Credit(
+        'Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors (ODbL)',
+        true,
+      ),
+    );
+  } catch (err) {
+    console.warn('[viewer] could not add OSM credit', err);
+  }
 
   window.viewer = viewer;
   console.info(
