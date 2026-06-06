@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta
+      name="description"
+      content="Explore the real Earth — real terrain, satellite imagery and OpenStreetMap data. Free & open, built on CesiumJS."
+    />
+    <title>Real Earth — Free &amp; Open</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="cesiumContainer"></div>
+
+    <div id="loadingOverlay">
+      <div class="loading-inner">
+        <div class="spinner" aria-hidden="true"></div>
+        <p id="loadingText">Loading the real Earth…</p>
+      </div>
+    </div>
+
+    <div id="errorBanner" role="alert" hidden></div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
