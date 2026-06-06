@@ -31,6 +31,29 @@ export const config = {
   // 'osm'       : OpenStreetMap raster — stylized "map" look, keyless.
   imagery: params.get('imagery') ?? 'sentinel2',
 
+  // --- Place search / geocoding -------------------------------------------
+  geocoding: {
+    // Nominatim is the free, keyless OSM geocoder. Swappable if it rate-limits.
+    nominatimUrl: 'https://nominatim.openstreetmap.org/search',
+  },
+
+  // --- 3D buildings --------------------------------------------------------
+  // 'osm-overpass' : keyless — extrude OSM footprints fetched via Overpass.
+  // 'ion-osm'      : Cesium OSM Buildings (global LOD1), needs a free ion token.
+  // 'none'         : no buildings.
+  buildings: params.get('buildings') ?? 'osm-overpass',
+
+  // --- OSM vector data (roads/water/land use) + procedural layer -----------
+  vector: {
+    // Public Overpass endpoints. We rotate to a fallback on failure / 429.
+    overpassUrls: [
+      'https://overpass-api.de/api/interpreter',
+      'https://overpass.kumi.systems/api/interpreter',
+    ],
+    enableTrees: true,
+    maxTreesPerTile: 1200,
+  },
+
   // --- Scene look ----------------------------------------------------------
   enableLighting: true, // sun-based terrain shading
   enableAtmosphere: true, // sky atmosphere + ground atmosphere
