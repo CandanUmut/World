@@ -3,6 +3,9 @@
  *
  * Phase 0: globe & free data stack.
  * Phase 1: place search, shareable URLs, bookmarks.
+ * Phase 2: world detail — buildings, roads, water, trees.
+ * Phase 3-4: vehicles — fly, drive, sail.
+ * Phase 5: living world — time, weather, ambient life, audio, settings.
  */
 import { createViewer } from './viewer.js';
 import { syncUrlToCamera } from './util/viewState.js';
@@ -14,7 +17,10 @@ import { createVehicleBar } from './ui/vehicleBar.js';
 import { Plane } from './vehicles/plane.js';
 import { Car } from './vehicles/car.js';
 import { Ship } from './vehicles/ship.js';
-import { toast } from './ui/toast.js';
+import { createEnvironment } from './world/sky.js';
+import { createBirds } from './world/birds.js';
+import { createSettings } from './ui/settings.js';
+import { maybeShowOnboarding } from './ui/onboarding.js';
 
 const loadingOverlay = document.getElementById('loadingOverlay');
 const loadingText = document.getElementById('loadingText');
@@ -29,7 +35,7 @@ function showError(message) {
 }
 
 async function boot() {
-  const { viewer } = await createViewer(setLoading);
+  const { viewer, terrainName, imageryName } = await createViewer(setLoading);
 
   // Phase 1 — navigation & sharing.
   createSearchBox(viewer);
@@ -47,17 +53,17 @@ async function boot() {
     { label: 'Ship', icon: '🚢', cls: Ship },
   ]);
 
+  // Phase 5 — a living world.
+  const environment = createEnvironment(viewer);
+  const birds = createBirds(viewer);
+  createSettings(viewer, environment, birds, { terrainName, imageryName });
+
   // Reveal the globe once the first frame renders.
   const remove = viewer.scene.postRender.addEventListener(() => {
     hideLoading();
     remove();
+    maybeShowOnboarding();
   });
-
-  // First-visit hint.
-  if (!localStorage.getItem('realEarth.seenHint')) {
-    setTimeout(() => toast('Search any place, then drag to look around.', { duration: 5000 }), 1200);
-    localStorage.setItem('realEarth.seenHint', '1');
-  }
 }
 
 boot().catch((err) => {

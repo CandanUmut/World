@@ -9,6 +9,7 @@ import { forwardVector, upVector, localToWorld } from './frame.js';
 import { createBoxMesh } from './mesh.js';
 import { createHud } from '../ui/hud.js';
 import { toast } from '../ui/toast.js';
+import { audio } from '../audio/audio.js';
 
 const HINTS = {
   Plane: 'W/S throttle · ↑↓ pitch · ←→ roll · A/D rudder · C camera · V exit',
@@ -48,6 +49,8 @@ export function createVehicleManager(viewer) {
     haveSmooth = false;
     cameraMode = 'chase';
     hud.show(vehicle.label, HINTS[vehicle.label] || '');
+    audio.blip();
+    audio.engineOn(vehicle.label);
     toast(`Entered ${vehicle.label}. Press V to exit.`, { duration: 2600 });
 
     lastTime = performance.now();
@@ -64,7 +67,9 @@ export function createVehicleManager(viewer) {
     vehicle.update(dt, scene);
     mesh.modelMatrix = Matrix4.clone(vehicle.modelMatrixRef, mesh.modelMatrix);
     updateCamera(dt);
-    hud.update(vehicle.hud(scene));
+    const data = vehicle.hud(scene);
+    hud.update(data);
+    audio.updateEngine(data);
   }
 
   function updateCamera(dt) {
@@ -110,6 +115,7 @@ export function createVehicleManager(viewer) {
     input.setActive(false);
     scene.screenSpaceCameraController.enableInputs = true;
     hud.hide();
+    audio.engineOff();
 
     // Pull back to a pleasant external view of where we left off.
     const carto = Cartographic.fromCartesian(lastPos);

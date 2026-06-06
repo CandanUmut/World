@@ -432,3 +432,135 @@ body {
   max-width: 240px;
   line-height: 1.4;
 }
+
+/* ======================================================================
+   Phase 5 — settings, weather, onboarding
+   ====================================================================== */
+
+/* Stack the top-right icon buttons so they don't overlap. */
+#bookmarksToggle { top: 14px; right: 14px; }
+#settingsToggle { top: 14px; right: 64px; }
+#settingsPanel { top: 66px; right: 14px; width: min(320px, calc(100vw - 28px)); }
+
+.set-group {
+  padding: 10px 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.set-group:last-child { border-bottom: none; }
+.set-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #9aa7b6;
+  margin-bottom: 8px;
+}
+.set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  padding: 2px 0;
+}
+.set-row input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+#setTime {
+  width: 100%;
+  accent-color: var(--accent);
+  margin-bottom: 8px;
+}
+.seg {
+  display: flex;
+  gap: 6px;
+}
+.seg button {
+  flex: 1;
+  padding: 7px 0;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ui-fg);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.seg button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #04101f;
+  font-weight: 600;
+}
+.set-sources code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+/* Overcast tint + rain --------------------------------------------------- */
+body.overcast #cesiumContainer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: rgba(120, 130, 140, 0.14);
+  z-index: 5;
+}
+#rainOverlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+  transition: opacity 0.6s ease;
+  background-image: repeating-linear-gradient(
+    100deg,
+    rgba(180, 200, 220, 0) 0px,
+    rgba(180, 200, 220, 0) 6px,
+    rgba(190, 210, 230, 0.35) 7px,
+    rgba(190, 210, 230, 0) 9px
+  );
+  background-size: 100% 200px;
+  animation: rainfall 0.55s linear infinite;
+}
+@keyframes rainfall {
+  to { background-position: 40px 200px; }
+}
+
+/* Onboarding ------------------------------------------------------------- */
+#onboarding {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 6, 13, 0.55);
+  backdrop-filter: blur(4px);
+  transition: opacity 0.4s ease;
+}
+#onboarding.hide { opacity: 0; }
+.ob-card {
+  width: min(420px, calc(100vw - 40px));
+  background: var(--ui-bg);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  padding: 26px 26px 20px;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.5);
+}
+.ob-card h1 { margin: 0 0 8px; font-size: 24px; }
+.ob-card p { color: #c2ccd6; font-size: 14px; line-height: 1.5; margin: 6px 0; }
+.ob-card ul { margin: 12px 0; padding-left: 18px; color: #c2ccd6; font-size: 14px; line-height: 1.7; }
+#obStart {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #04101f;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ob-credit { font-size: 11px !important; color: #7f8b99 !important; text-align: center; margin-top: 14px !important; }
