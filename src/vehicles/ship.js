@@ -5,7 +5,12 @@
  *
  * Controls:  W/S throttle · ← → steer
  */
-import { Cartesian3, Cartographic, Math as CesiumMath } from 'cesium';
+import {
+  Cartesian3,
+  Cartographic,
+  Math as CesiumMath,
+  sampleTerrainMostDetailed,
+} from 'cesium';
 import { input } from './input.js';
 import { modelMatrix, forwardVector, compassHeading } from './frame.js';
 
@@ -20,6 +25,37 @@ const SEA_LEVEL = 0;
 
 export class Ship {
   static SPAWN_AGL = 0;
+  static label = 'Ship';
+
+  /**
+   * Look for water near the requested spawn: sample terrain on an outward ring
+   * and pick the nearest point at/below sea level. Returns {lon,lat} or null.
+   */
+  static async findSpawn(scene, lon, lat) {
+    const mPerDegLat = 111_320;
+    const mPerDegLon = 111_320 * Math.cos((lat * Math.PI) / 180);
+    const cands = [{ lon, lat }];
+    for (let r = 1; r <= 10; r++) {
+      const d = r * 150;
+      for (let a = 0; a < 12; a++) {
+        const ang = (a / 12) * 2 * Math.PI;
+        cands.push({
+          lon: lon + (d * Math.cos(ang)) / mPerDegLon,
+          lat: lat + (d * Math.sin(ang)) / mPerDegLat,
+        });
+      }
+    }
+    const cartos = cands.map((c) => Cartographic.fromDegrees(c.lon, c.lat));
+    try {
+      await sampleTerrainMostDetailed(scene.terrainProvider, cartos);
+    } catch {
+      return null;
+    }
+    for (let i = 0; i < cands.length; i++) {
+      if (cartos[i].height != null && cartos[i].height <= 0.4) return cands[i];
+    }
+    return null;
+  }
 
   constructor({ position, heading }) {
     // Force spawn to sea level.

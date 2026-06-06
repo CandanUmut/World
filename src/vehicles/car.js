@@ -7,6 +7,7 @@
 import { Cartesian3, Cartographic, Math as CesiumMath } from 'cesium';
 import { input } from './input.js';
 import { modelMatrix, forwardVector, compassHeading } from './frame.js';
+import { groundHeightSync } from '../world/heights.js';
 
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
@@ -83,7 +84,7 @@ export class Car {
 
     // Stick to the ground.
     const carto = Cartographic.fromCartesian(this.position);
-    const ground = scene.globe.getHeight(carto);
+    const ground = groundHeightSync(scene, carto);
     if (ground != null) {
       carto.height = ground + RIDE_HEIGHT;
       this.position = Cartographic.toCartesian(carto);
@@ -110,5 +111,5 @@ export class Car {
 // Sample terrain height a distance `d` along `fwd` from `world`.
 function sampleAhead(scene, world, fwd, d) {
   const p = Cartesian3.add(world, Cartesian3.multiplyByScalar(fwd, d, new Cartesian3()), new Cartesian3());
-  return scene.globe.getHeight(Cartographic.fromCartesian(p));
+  return groundHeightSync(scene, Cartographic.fromCartesian(p));
 }

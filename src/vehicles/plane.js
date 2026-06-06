@@ -10,6 +10,7 @@
 import { Cartesian3, Cartographic, Math as CesiumMath } from 'cesium';
 import { input } from './input.js';
 import { modelMatrix, forwardVector, compassHeading } from './frame.js';
+import { groundHeightSync } from '../world/heights.js';
 
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
@@ -98,7 +99,7 @@ export class Plane {
 
     // --- Keep above terrain (no crash, arcade-friendly) ---
     const carto = Cartographic.fromCartesian(this.position);
-    const ground = scene.globe.getHeight(carto);
+    const ground = groundHeightSync(scene, carto);
     if (ground != null && carto.height < ground + 3) {
       carto.height = ground + 3;
       this.position = Cartographic.toCartesian(carto);
@@ -115,7 +116,7 @@ export class Plane {
 
   hud(scene) {
     const carto = Cartographic.fromCartesian(this.position);
-    const ground = scene.globe.getHeight(carto);
+    const ground = groundHeightSync(scene, carto);
     return {
       altitude: carto.height,
       agl: ground != null ? carto.height - ground : null,

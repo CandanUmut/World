@@ -1,7 +1,8 @@
 /**
- * Owns the active vehicle: spawns it, runs the per-frame update loop, drives the
- * visual mesh, the chase/cockpit camera and the HUD, and handles getting in/out.
- * Vehicle types (Plane, Car, Ship) plug in via a small common interface.
+ * Owns the active vehicle: spawns it on the real surface (async terrain sample),
+ * runs the per-frame update loop, drives the visual mesh, the chase/cockpit
+ * camera and the HUD, and handles getting in/out. Vehicle types plug in via a
+ * small common interface.
  */
 import { Cartesian3, Cartographic, Matrix4, Math as CesiumMath } from 'cesium';
 import { input } from './input.js';
@@ -10,8 +11,10 @@ import { createBoxMesh } from './mesh.js';
 import { createHud } from '../ui/hud.js';
 import { toast } from '../ui/toast.js';
 import { audio } from '../audio/audio.js';
+import { groundHeightDetailed, groundHeightSync } from '../world/heights.js';
 
 const HINTS = {
+  Walk: 'W/S walk · ←→ turn · A/D strafe · Shift run · C camera · V exit',
   Plane: 'W/S throttle · ↑↓ pitch · ←→ roll · A/D rudder · C camera · V exit',
   Car: 'W/S accel/brake · ←→ steer · C camera · V exit',
   Ship: 'W/S throttle · ←→ steer · C camera · V exit',
@@ -25,36 +28,79 @@ export function createVehicleManager(viewer) {
   let mesh = null;
   let cameraMode = 'chase';
   let lastTime = 0;
-  let tickRemover = null;
+  let spawning = false;
   const smoothCamPos = new Cartesian3();
   let haveSmooth = false;
 
-  function spawnPosition(spawnAgl) {
-    const carto = Cartographic.clone(viewer.camera.positionCartographic);
-    const ground = scene.globe.getHeight(carto) ?? 0;
-    carto.height = ground + spawnAgl;
-    return Cartographic.toCartesian(carto);
+  async function enter(VehicleClass) {
+    if (vehicle || spawning) return;
+    spawning = true;
+    try {
+      // Spawn point = ground under the current camera.
+      const camCarto = viewer.camera.positionCartographic;
+      let lon = CesiumMath.toDegrees(camCarto.longitude);
+      let lat = CesiumMath.toDegrees(camCarto.latitude);
+      const heading = viewer.camera.heading;
+
+      toast('Descending to the surface…', { duration: 1500 });
+
+      // Vehicle-specific spawn adjustment (e.g. Ship looks for water).
+      if (VehicleClass.findSpawn) {
+        const better = await VehicleClass.findSpawn(scene, lon, lat);
+        if (better) {
+          lon = better.lon;
+          lat = better.lat;
+        } else if (VehicleClass.label === 'Ship') {
+          toast('No water found nearby — try near a coast, lake or river.', { type: 'warn' });
+        }
+      }
+
+      // Await the TRUE ground elevation (tiles loaded) before placing anything.
+      // This is the fix for vehicles spawning underground.
+      const ground = await groundHeightDetailed(scene, lon, lat);
+      const position = Cartesian3.fromDegrees(lon, lat, ground + (VehicleClass.SPAWN_AGL ?? 0));
+
+      vehicle = new VehicleClass({ position, heading });
+      mesh = createBoxMesh(vehicle.meshBoxes());
+      scene.primitives.add(mesh);
+      cameraMode = vehicle.defaultCamera || 'chase';
+
+      // Smoothly descend the camera to the start view, then hand over control.
+      await descendTo();
+
+      input.setActive(true);
+      scene.screenSpaceCameraController.enableInputs = false;
+      haveSmooth = false;
+      hud.show(vehicle.label, HINTS[vehicle.label] || '');
+      audio.blip();
+      audio.engineOn(vehicle.label);
+      toast(`Entered ${vehicle.label}. Press V to exit.`, { duration: 2400 });
+
+      lastTime = performance.now();
+      scene.preRender.addEventListener(tick);
+    } finally {
+      spawning = false;
+    }
   }
 
-  function enter(VehicleClass) {
-    if (vehicle) exit();
-    const position = spawnPosition(VehicleClass.SPAWN_AGL ?? 0);
-    vehicle = new VehicleClass({ position, heading: viewer.camera.heading });
-
-    mesh = createBoxMesh(vehicle.meshBoxes());
-    scene.primitives.add(mesh);
-
-    input.setActive(true);
-    scene.screenSpaceCameraController.enableInputs = false;
-    haveSmooth = false;
-    cameraMode = 'chase';
-    hud.show(vehicle.label, HINTS[vehicle.label] || '');
-    audio.blip();
-    audio.engineOn(vehicle.label);
-    toast(`Entered ${vehicle.label}. Press V to exit.`, { duration: 2600 });
-
-    lastTime = performance.now();
-    tickRemover = scene.preRender.addEventListener(tick);
+  function descendTo() {
+    const M = vehicle.modelMatrixRef;
+    const fwd = forwardVector(M, new Cartesian3());
+    const up = upVector(M, new Cartesian3());
+    const params = vehicle.cameraParams();
+    const camPos =
+      cameraMode === 'cockpit'
+        ? localToWorld(M, params.cockpit.x, params.cockpit.y, params.cockpit.z, new Cartesian3())
+        : localToWorld(M, -params.chase.back, 0, params.chase.up, new Cartesian3());
+    return new Promise((resolve) => {
+      viewer.camera.flyTo({
+        destination: camPos,
+        orientation: { direction: fwd, up },
+        duration: 1.3,
+        complete: resolve,
+        cancel: resolve,
+      });
+    });
   }
 
   function tick() {
@@ -78,36 +124,41 @@ export function createVehicleManager(viewer) {
     const up = upVector(M, new Cartesian3());
     const params = vehicle.cameraParams();
 
-    let camPos;
     if (cameraMode === 'cockpit') {
       const c = params.cockpit;
-      camPos = localToWorld(M, c.x, c.y, c.z, new Cartesian3());
+      const camPos = localToWorld(M, c.x, c.y, c.z, new Cartesian3());
       haveSmooth = false;
       viewer.camera.setView({ destination: camPos, orientation: { direction: fwd, up } });
       return;
     }
 
-    // Chase: behind (-X) and above (+Z) in body frame, smoothed for a nice feel.
+    // Chase: behind (-X) and above (+Z) in body frame, smoothed.
     const ch = params.chase;
     const target = localToWorld(M, -ch.back, 0, ch.up, new Cartesian3());
     if (!haveSmooth) {
       Cartesian3.clone(target, smoothCamPos);
       haveSmooth = true;
     } else {
-      const t = Math.min(dt * 6, 1); // smoothing rate
-      Cartesian3.lerp(smoothCamPos, target, t, smoothCamPos);
+      Cartesian3.lerp(smoothCamPos, target, Math.min(dt * 6, 1), smoothCamPos);
     }
-    viewer.camera.setView({
-      destination: smoothCamPos,
-      orientation: { direction: fwd, up },
-    });
+    clampAboveGround(smoothCamPos);
+    viewer.camera.setView({ destination: smoothCamPos, orientation: { direction: fwd, up } });
+  }
+
+  // Keep the chase camera from clipping below hills.
+  function clampAboveGround(pos) {
+    const carto = Cartographic.fromCartesian(pos);
+    const g = groundHeightSync(scene, carto);
+    if (g != null && carto.height < g + 2) {
+      carto.height = g + 2;
+      Cartographic.toCartesian(carto, pos);
+    }
   }
 
   function exit() {
     if (!vehicle) return;
     const lastPos = vehicle.position;
     scene.preRender.removeEventListener(tick);
-    tickRemover = null;
     scene.primitives.remove(mesh);
     mesh = null;
     vehicle = null;
@@ -117,7 +168,6 @@ export function createVehicleManager(viewer) {
     hud.hide();
     audio.engineOff();
 
-    // Pull back to a pleasant external view of where we left off.
     const carto = Cartographic.fromCartesian(lastPos);
     viewer.camera.flyTo({
       destination: Cartesian3.fromDegrees(
@@ -135,7 +185,6 @@ export function createVehicleManager(viewer) {
     haveSmooth = false;
   }
 
-  // Manager-level keys (only meaningful while in a vehicle).
   window.addEventListener('keydown', (e) => {
     if (!vehicle) return;
     if (e.target?.tagName === 'INPUT') return;

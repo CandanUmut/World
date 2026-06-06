@@ -14,6 +14,7 @@ import { createBookmarks } from './ui/bookmarks.js';
 import { initRegionLoader } from './world/regionLoader.js';
 import { createVehicleManager } from './vehicles/vehicleManager.js';
 import { createVehicleBar } from './ui/vehicleBar.js';
+import { Walker } from './vehicles/walk.js';
 import { Plane } from './vehicles/plane.js';
 import { Car } from './vehicles/car.js';
 import { Ship } from './vehicles/ship.js';
@@ -54,6 +55,7 @@ async function boot() {
   // Phase 3 & 4 — vehicles: fly, drive and sail the real world.
   const vehicleManager = createVehicleManager(viewer);
   createVehicleBar(vehicleManager, [
+    { label: 'Walk', icon: '🚶', cls: Walker },
     { label: 'Plane', icon: '✈', cls: Plane },
     { label: 'Car', icon: '🚗', cls: Car },
     { label: 'Ship', icon: '🚢', cls: Ship },
