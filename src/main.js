@@ -21,6 +21,7 @@ import { Ship } from './vehicles/ship.js';
 import { createEnvironment } from './world/sky.js';
 import { createBirds } from './world/birds.js';
 import { createSettings } from './ui/settings.js';
+import { createPlaces } from './ui/places.js';
 import { maybeShowOnboarding } from './ui/onboarding.js';
 import { installImageryResilience, installGlobalGuards } from './world/resilience.js';
 
@@ -65,6 +66,9 @@ async function boot() {
   const environment = createEnvironment(viewer);
   const birds = createBirds(viewer);
   createSettings(viewer, environment, birds, { terrainName, imageryName });
+
+  // P3 — famous-places menu + in-world landmark labels (exploring hooks).
+  createPlaces(viewer);
 
   // Reveal the globe once the first frame renders.
   const remove = viewer.scene.postRender.addEventListener(() => {

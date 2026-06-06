@@ -97,5 +97,22 @@ export const config = {
     heading: 35,
     pitch: -16,
   },
+
+  // Famous real places to jump to — gives exploring hooks. Each is an oblique
+  // arrival view (height in metres, heading/pitch in degrees).
+  landmarks: [
+    { name: 'Golden Gate Bridge', lon: -122.4786, lat: 37.8199, height: 900, heading: 320, pitch: -14 },
+    { name: 'Eiffel Tower', lon: 2.2945, lat: 48.8584, height: 700, heading: 200, pitch: -18 },
+    { name: 'Colosseum', lon: 12.4924, lat: 41.8902, height: 600, heading: 250, pitch: -22 },
+    { name: 'Statue of Liberty', lon: -74.0445, lat: 40.6892, height: 700, heading: 20, pitch: -16 },
+    { name: 'Big Ben', lon: -0.1246, lat: 51.5007, height: 650, heading: 220, pitch: -18 },
+    { name: 'Sydney Opera House', lon: 151.2153, lat: -33.8568, height: 800, heading: 200, pitch: -16 },
+    { name: 'Mount Fuji', lon: 138.7274, lat: 35.3606, height: 6500, heading: 0, pitch: -10 },
+    { name: 'Burj Khalifa', lon: 55.2744, lat: 25.1972, height: 1200, heading: 240, pitch: -20 },
+    { name: 'Christ the Redeemer', lon: -43.2105, lat: -22.9519, height: 1400, heading: 80, pitch: -12 },
+    { name: 'Grand Canyon', lon: -112.1124, lat: 36.1069, height: 4500, heading: 30, pitch: -12 },
+    { name: 'Table Mountain', lon: 18.4096, lat: -33.9628, height: 3500, heading: 200, pitch: -10 },
+    { name: 'Brandenburg Gate', lon: 13.3777, lat: 52.5163, height: 600, heading: 270, pitch: -18 },
+  ],
 };
 

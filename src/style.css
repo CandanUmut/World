@@ -564,3 +564,10 @@ body.overcast #cesiumContainer::after {
   cursor: pointer;
 }
 .ob-credit { font-size: 11px !important; color: #7f8b99 !important; text-align: center; margin-top: 14px !important; }
+
+/* ======================================================================
+   P3 — famous places button
+   ====================================================================== */
+#placesToggle { top: 14px; right: 114px; }
+#placesPanel { top: 66px; right: 14px; }
+#placesPanel .bm-go { width: 100%; margin: 2px 0; }
