@@ -39,6 +39,8 @@ export class FloatingOrigin {
   /** Convert a lon/lat to current world meters. */
   toWorld(lon, lat) { return this.anchor.toWorld(lon, lat); }
   toLonLat(x, z) { return this.anchor.toLonLat(x, z); }
+  /** Convert absolute mercator meters to current world meters. */
+  mercToWorld(mx, my) { return this.anchor.mercToWorld(mx, my); }
 
   /**
    * Given the player's current world position, rebase the origin to that

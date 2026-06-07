@@ -15,11 +15,14 @@ export const config = {
   },
 
   // OSM data feed. The baked New York PMTiles archive lives in /public.
-  // Override with ?pmtiles= or VITE_PMTILES_URL.
-  pmtilesUrl:
-    params.get('pmtiles') ||
-    import.meta.env.VITE_PMTILES_URL ||
-    './new-york.pmtiles',
+  // Override with ?pmtiles= or VITE_PMTILES_URL. Resolved to an ABSOLUTE URL
+  // against the document so the decoder worker (whose own base URL is the
+  // /src/workers/ script path) fetches it from the site root, not relative to
+  // itself.
+  pmtilesUrl: new URL(
+    params.get('pmtiles') || import.meta.env.VITE_PMTILES_URL || './new-york.pmtiles',
+    location.href,
+  ).href,
 
   // Floating-origin rebase threshold (meters).
   rebaseThreshold: num('rebase', 3000),

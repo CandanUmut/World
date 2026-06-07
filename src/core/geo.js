@@ -52,6 +52,14 @@ export class GeoAnchor {
     };
   }
 
+  /** raw Web-Mercator meters -> world {x, z} meters (east, south). */
+  mercToWorld(mx, my) {
+    return {
+      x: (mx - this.mx) * this.scale,
+      z: -(my - this.my) * this.scale,
+    };
+  }
+
   /** world {x, z} meters -> lon/lat (degrees). */
   toLonLat(x, z) {
     const mx = x / this.scale + this.mx;

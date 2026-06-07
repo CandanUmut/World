@@ -6,34 +6,67 @@ import { createInput } from './core/input.js';
 import { FloatingOrigin } from './core/floatingOrigin.js';
 import { createFreeCamera } from './camera/freeCamera.js';
 import { createOverlay } from './ui/overlay.js';
-import { createGroundGrid } from './world/groundGrid.js';
+import { createTileStreamer } from './data/tileStreamer.js';
+import { createDebugTiles } from './world/debugTiles.js';
 
 const { renderer, scene, camera } = createEngine();
 const input = createInput(renderer.domElement);
 const overlay = createOverlay();
 
-// Floating origin anchored at the start location. Streamed content (Phase 1+)
-// will register with this so the world stays centered on the player.
+// Floating origin anchored at the start location.
 const origin = new FloatingOrigin(config.start.lon, config.start.lat, config.rebaseThreshold);
 
-// Phase 0 placeholder world.
-const ground = origin.track(createGroundGrid());
+// A simple ground so the line work reads against a floor (replaced in Phase 2).
+const ground = origin.track(new THREE.Mesh(
+  new THREE.PlaneGeometry(20000, 20000),
+  new THREE.MeshStandardMaterial({ color: 0x3a4250, roughness: 1 }),
+));
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.5;
 scene.add(ground);
 
+// --- OSM data feed (Phase 1) ---
+const STREAM_Z = 14; // PMTiles maxzoom; buildings + roads present here
+const debugTiles = createDebugTiles(scene, origin);
+const streamer = createTileStreamer({
+  url: config.pmtilesUrl,
+  z: STREAM_Z,
+  onTile: (msg) => debugTiles.addTile(msg),
+  onDrop: (key) => debugTiles.dropTile(key),
+  onReady: () => console.log('[tiles] archive ready'),
+});
+
+// Re-anchor tile streaming on rebase is automatic (geography-based).
+origin.onRebase(() => { streamUpdate.force = true; });
+
+// Survey camera start, looking down at the streets.
+camera.position.set(0, 350, 350);
 const cam = createFreeCamera(camera, input);
 
 const clock = new THREE.Clock();
 
+// Throttle streaming updates.
+const streamUpdate = { t: 0, force: true };
+function maybeStream(lon, lat, dt) {
+  streamUpdate.t -= dt;
+  if (streamUpdate.t > 0 && !streamUpdate.force) return;
+  streamUpdate.t = 0.25;
+  streamUpdate.force = false;
+  streamer.update(lon, lat, config.tileRadius);
+}
+
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.1);
   cam.update(dt);
-
-  // Keep the world centered on the camera while we have no vehicle yet.
   origin.maybeRebase(camera.position.x, camera.position.z, [camera]);
 
   const ll = origin.toLonLat(camera.position.x, camera.position.z);
+  maybeStream(ll.lon, ll.lat, dt);
+
+  const s = streamer.stats();
   overlay.setLocation(
-    `lat ${ll.lat.toFixed(5)}  lon ${ll.lon.toFixed(5)}\nalt ${camera.position.y.toFixed(0)} m`,
+    `lat ${ll.lat.toFixed(5)}  lon ${ll.lon.toFixed(5)}\n` +
+    `alt ${camera.position.y.toFixed(0)} m  ·  tiles ${debugTiles.count} (${s.pending} loading)`,
   );
 
   renderer.render(scene, camera);
@@ -42,7 +75,6 @@ function frame() {
 }
 requestAnimationFrame(frame);
 
-// Expose for console debugging.
 if (config.debug) {
-  window.__world = { scene, camera, renderer, origin, THREE };
+  window.__world = { scene, camera, renderer, origin, streamer, debugTiles, THREE };
 }
