@@ -1,14 +1,17 @@
 import { tileRing, tileKey } from './tiles.js';
 
+const MAX_LOD = 4;
+
 /**
- * Streams the ring of tiles around the player. Owns a small pool of decoder
- * workers, requests missing tiles nearest-first, caps in-flight requests so a
- * burst of movement never floods the workers, and drops tiles that leave the
- * radius. Decoded results are handed to `onTile`; dropped keys to `onDrop`.
+ * Streams the ring of tiles around the player with distance-based LOD. Each
+ * tile's LOD equals its Chebyshev distance from the center tile (clamped):
+ * near tiles are built in full, far tiles only keep their tall buildings, so
+ * the skyline reads at a distance for a fraction of the geometry. When a tile
+ * crosses an LOD boundary as the player moves, it is rebuilt at the new tier.
  *
- * The streamer is geography-based (it works in lon/lat + tile coords), so it
- * is unaffected by floating-origin rebases — only the consumer that places
- * meshes needs to know the current anchor.
+ * Owns a small pool of decoder workers, requests nearest-first, caps in-flight
+ * work, and drops tiles that leave the radius. Geography-based, so it is
+ * unaffected by floating-origin rebases.
  */
 export function createTileStreamer({ url, z, workers = 2, maxInFlight = 6, onTile, onDrop, onReady }) {
   const pool = [];
@@ -22,12 +25,12 @@ export function createTileStreamer({ url, z, workers = 2, maxInFlight = 6, onTil
   let readyCount = 0;
   let ready = false;
 
-  const want = new Set();        // keys we currently want loaded
-  const loaded = new Set();      // keys with geometry placed
-  const pending = new Map();     // key -> requestId (in flight)
-  const queue = [];              // [{key,z,x,y}] waiting for a free slot
+  const want = new Map();      // key -> desired lod
+  const have = new Map();      // key -> rendered lod
+  const inflight = new Map();  // key -> { id, lod }
+  const meta = new Map();      // requestId -> { key, lod }
+  let queue = [];
   let nextId = 1;
-  const idToKey = new Map();
 
   function handleMessage(msg) {
     if (msg.type === 'ready') {
@@ -37,54 +40,70 @@ export function createTileStreamer({ url, z, workers = 2, maxInFlight = 6, onTil
     if (msg.type === 'error') { console.warn('[tiles] worker error', msg.error); return; }
     if (msg.type !== 'tile') return;
 
-    const key = idToKey.get(msg.id);
-    idToKey.delete(msg.id);
-    if (key) pending.delete(key);
+    const m = meta.get(msg.id);
+    meta.delete(msg.id);
+    if (!m) { pump(); return; }
+    const { key, lod } = m;
 
-    // If it left the wanted set while decoding, discard.
-    if (!key || !want.has(key)) { pump(); return; }
-    loaded.add(key);
-    if (!msg.ok) { console.warn('[tiles] decode failed', key, msg.error); pump(); return; }
+    // Clear in-flight only if this response is the current request for the key.
+    const inf = inflight.get(key);
+    if (inf && inf.id === msg.id) inflight.delete(key);
+
+    // Discard stale results (tile dropped or LOD changed since requested).
+    if (want.get(key) !== lod) { pump(); return; }
+    if (!msg.ok) { pump(); return; }
+
+    if (have.has(key)) onDrop?.(key); // replacing an existing LOD
+    have.set(key, lod);
     if (!msg.empty) onTile?.(msg);
     pump();
   }
 
   function pump() {
-    while (ready && pending.size < maxInFlight && queue.length) {
+    while (ready && inflight.size < maxInFlight && queue.length) {
       const t = queue.shift();
-      if (!want.has(t.key) || loaded.has(t.key) || pending.has(t.key)) continue;
+      if (want.get(t.key) !== t.lod) continue;
+      if (have.get(t.key) === t.lod) continue;
+      const inf = inflight.get(t.key);
+      if (inf && inf.lod === t.lod) continue;
       const id = nextId++;
-      pending.set(t.key, id);
-      idToKey.set(id, t.key);
-      pool[rr++ % pool.length].postMessage({ type: 'tile', id, z: t.z, x: t.x, y: t.y });
+      inflight.set(t.key, { id, lod: t.lod });
+      meta.set(id, { key: t.key, lod: t.lod });
+      pool[rr++ % pool.length].postMessage({ type: 'tile', id, z: t.z, x: t.x, y: t.y, lod: t.lod });
     }
   }
 
-  /** Recompute the wanted set around lon/lat and reconcile loads/drops. */
+  /** Recompute the wanted set + LODs around lon/lat and reconcile. */
   function update(lon, lat, radius) {
     const ring = tileRing(lon, lat, z, radius);
-    const nextWant = new Set(ring.map((t) => tileKey(t.z, t.x, t.y)));
+    const next = new Map();
+    for (const t of ring) next.set(tileKey(t.z, t.x, t.y), Math.min(t.dist, MAX_LOD));
 
     // Drop tiles no longer wanted.
-    for (const key of want) {
-      if (!nextWant.has(key)) {
-        want.delete(key);
-        if (loaded.has(key)) { loaded.delete(key); onDrop?.(key); }
-        pending.delete(key); // late results will be discarded by the want check
-      }
+    for (const key of have.keys()) {
+      if (!next.has(key)) { have.delete(key); onDrop?.(key); }
     }
+    want.clear();
+    for (const [k, v] of next) want.set(k, v);
 
-    // Enqueue newly wanted tiles (nearest-first preserved by ring order).
-    queue.length = 0;
+    // Rebuild the request queue (nearest-first), skipping satisfied tiles.
+    queue = [];
     for (const t of ring) {
       const key = tileKey(t.z, t.x, t.y);
-      want.add(key);
-      if (!loaded.has(key) && !pending.has(key)) queue.push({ key, z: t.z, x: t.x, y: t.y });
+      const lod = next.get(key);
+      if (have.get(key) === lod) continue;
+      const inf = inflight.get(key);
+      if (inf && inf.lod === lod) continue;
+      queue.push({ key, z: t.z, x: t.x, y: t.y, lod });
     }
     pump();
   }
 
   function dispose() { pool.forEach((w) => w.terminate()); }
 
-  return { update, dispose, get ready() { return ready; }, stats: () => ({ want: want.size, loaded: loaded.size, pending: pending.size }) };
+  return {
+    update, dispose,
+    get ready() { return ready; },
+    stats: () => ({ want: want.size, loaded: have.size, pending: inflight.size }),
+  };
 }

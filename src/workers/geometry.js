@@ -189,10 +189,34 @@ function ribbon(s, lx, lz, halfW, y, color) {
   }
 }
 
+/** Minimum building height kept at each LOD (distance) tier. */
+const LOD_MIN_HEIGHT = [0, 0, 14, 30, 50];
+
+/** Signed area of a local ring (x,z). */
+function ringArea(lx, lz) {
+  let a = 0;
+  for (let i = 0, j = lx.length - 1; i < lx.length; j = i++) {
+    a += (lx[j] + lx[i]) * (lz[j] - lz[i]);
+  }
+  return a / 2;
+}
+/** Point-in-polygon (local x,z), ray cast. */
+function pointInRing(px, pz, lx, lz) {
+  let inside = false;
+  for (let i = 0, j = lx.length - 1; i < lx.length; j = i++) {
+    if ((lz[i] > pz) !== (lz[j] > pz) &&
+        px < ((lx[j] - lx[i]) * (pz - lz[i])) / (lz[j] - lz[i]) + lx[i]) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
 // ---------------------------------------------------------------------------
 // Top-level: build all meshes for a tile.
 // ---------------------------------------------------------------------------
-export function buildTileMeshes(payload, mcx, mcy, maxBuildings = 2200) {
+export function buildTileMeshes(payload, mcx, mcy, opts = {}) {
+  const { lod = 0, maxBuildings = 2200, maxTrees = 420 } = opts;
   // tile-center latitude -> meters scale (cos lat correction)
   const latC = (2 * Math.atan(Math.exp(mcy / R)) - Math.PI / 2);
   const scale = Math.cos(latC);
@@ -218,10 +242,28 @@ export function buildTileMeshes(payload, mcx, mcy, maxBuildings = 2200) {
       }
     }
   };
-  addFills(payload.landcover, 'landcover');
+  // Collect tree-eligible polygons (local rings) while filling ground.
+  const treeAreas = [];
+  const addFillsTrees = (polys, kind) => {
+    for (const f of polys || []) {
+      const color = groundColor(kind, f.klass);
+      const y = 0.02;
+      const wooded = kind === 'park' ||
+        ['wood', 'forest', 'grass', 'meadow', 'park', 'garden', 'recreation_ground'].includes(f.klass);
+      for (const ring of f.rings) {
+        const { lx, lz } = ringToLocal(ring);
+        fillRing(ground, lx, lz, y, color);
+        if (wooded) treeAreas.push({ lx, lz });
+      }
+    }
+  };
   addFills(payload.landuse, 'landuse');
-  addFills(payload.parks, 'park');
+  addFillsTrees(payload.landcover, 'landcover');
+  addFillsTrees(payload.parks, 'park');
   addFills(payload.water, 'water');
+
+  // --- trees: density-sample inside wooded/park polygons ---
+  const trees = sampleTrees(treeAreas, maxTrees);
 
   // --- roads (sorted by width so wide roads draw first / underneath) ---
   const roads = makeSink();
@@ -234,9 +276,10 @@ export function buildTileMeshes(payload, mcx, mcy, maxBuildings = 2200) {
     ribbon(roads, lx, lz, st.w / 2, 0.07, st.c);
   }
 
-  // --- buildings (cap to the tallest N to bound geometry) ---
+  // --- buildings (LOD: drop short buildings on far tiles; cap to tallest N) ---
   const buildings = makeSink();
-  let blds = (payload.buildings || []).filter((b) => !b.hide3d);
+  const minH = LOD_MIN_HEIGHT[Math.min(lod, LOD_MIN_HEIGHT.length - 1)];
+  let blds = (payload.buildings || []).filter((b) => !b.hide3d && (b.height || 8) >= minH);
   if (blds.length > maxBuildings) {
     blds = blds.sort((a, b) => (b.height || 0) - (a.height || 0)).slice(0, maxBuildings);
   }
@@ -263,7 +306,43 @@ export function buildTileMeshes(payload, mcx, mcy, maxBuildings = 2200) {
     ground: sinkToBuffers(ground),
     roads: sinkToBuffers(roads),
     buildings: sinkToBuffers(buildings),
+    trees: trees && trees.length ? trees : null,
   };
+}
+
+/**
+ * Density-sample tree positions inside wooded/park rings. Returns a flat
+ * Float32Array of [x, z, scale] triples (tile-local meters).
+ */
+function sampleTrees(areas, maxTrees) {
+  const SPACING = 16; // ~1 tree per 16x16 m of green
+  const out = [];
+  let seed = 7;
+  for (const a of areas) {
+    if (out.length / 3 >= maxTrees) break;
+    const { lx, lz } = a;
+    if (lx.length < 3) continue;
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (let i = 0; i < lx.length; i++) {
+      if (lx[i] < minX) minX = lx[i];
+      if (lx[i] > maxX) maxX = lx[i];
+      if (lz[i] < minZ) minZ = lz[i];
+      if (lz[i] > maxZ) maxZ = lz[i];
+    }
+    const area = Math.abs(ringArea(lx, lz));
+    let n = Math.min(140, Math.floor(area / (SPACING * SPACING)));
+    let attempts = 0;
+    while (n > 0 && attempts < n * 6 && out.length / 3 < maxTrees) {
+      attempts++;
+      const px = minX + rand01(seed++) * (maxX - minX);
+      const pz = minZ + rand01(seed++) * (maxZ - minZ);
+      if (!pointInRing(px, pz, lx, lz)) continue;
+      const scale = 0.8 + rand01(seed++) * 0.9;
+      out.push(px, pz, scale);
+      n--;
+    }
+  }
+  return new Float32Array(out);
 }
 
 // ---------------------------------------------------------------------------

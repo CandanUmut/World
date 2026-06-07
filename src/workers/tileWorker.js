@@ -32,14 +32,14 @@ self.onmessage = async (e) => {
   }
 
   if (msg.type === 'tile') {
-    const { id, z, x, y } = msg;
+    const { id, z, x, y, lod } = msg;
     try {
       const res = await archive.getZxy(z, x, y);
       if (!res || !res.data) {
         self.postMessage({ type: 'tile', id, z, x, y, ok: true, empty: true });
         return;
       }
-      const decoded = decodeTile(new Uint8Array(res.data), z, x, y);
+      const decoded = decodeTile(new Uint8Array(res.data), z, x, y, lod || 0);
       self.postMessage(
         { type: 'tile', id, z, x, y, ok: true, ...decoded.payload },
         decoded.transfer,
@@ -50,7 +50,7 @@ self.onmessage = async (e) => {
   }
 };
 
-function decodeTile(bytes, z, x, y) {
+function decodeTile(bytes, z, x, y, lod) {
   const tile = new VectorTile(new Protobuf(bytes));
   const { mx: mx0, my: my0, size } = tileTopLeftMerc(z, x, y);
   const transfer = []; // unused for raw rings; kept for helper signatures
@@ -134,7 +134,7 @@ function decodeTile(bytes, z, x, y) {
   // Build stylized meshes in the worker (tile-center mercator as local origin).
   const mcx = mx0 + size / 2;
   const mcy = my0 - size / 2;
-  const meshes = buildTileMeshes(payload, mcx, mcy);
+  const meshes = buildTileMeshes(payload, mcx, mcy, { lod });
 
   // Transfer only the final mesh buffers (raw rings stay and are GC'd).
   const out = { center: meshes.center };
@@ -145,6 +145,8 @@ function decodeTile(bytes, z, x, y) {
     out[key] = m;
     meshTransfer.push(m.positions.buffer, m.normals.buffer, m.colors.buffer);
   }
+  out.trees = meshes.trees;
+  if (meshes.trees) meshTransfer.push(meshes.trees.buffer);
   return { payload: out, transfer: meshTransfer };
 }
 
