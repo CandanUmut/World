@@ -1,85 +1,48 @@
-/**
- * Real Earth — application entry point.
- *
- * Phase 0: globe & free data stack.
- * Phase 1: place search, shareable URLs, bookmarks.
- * Phase 2: world detail — buildings, roads, water, trees.
- * Phase 3-4: vehicles — fly, drive, sail.
- * Phase 5: living world — time, weather, ambient life, audio, settings.
- */
-import { createViewer } from './viewer.js';
-import { syncUrlToCamera } from './util/viewState.js';
-import { createSearchBox } from './ui/searchBox.js';
-import { createBookmarks } from './ui/bookmarks.js';
-import { initRegionLoader } from './world/regionLoader.js';
-import { createVehicleManager } from './vehicles/vehicleManager.js';
-import { createVehicleBar } from './ui/vehicleBar.js';
-import { Walker } from './vehicles/walk.js';
-import { Plane } from './vehicles/plane.js';
-import { Car } from './vehicles/car.js';
-import { Ship } from './vehicles/ship.js';
-import { createEnvironment } from './world/sky.js';
-import { createBirds } from './world/birds.js';
-import { createSettings } from './ui/settings.js';
-import { createPlaces } from './ui/places.js';
-import { maybeShowOnboarding } from './ui/onboarding.js';
-import { installImageryResilience, installGlobalGuards } from './world/resilience.js';
+import './style.css';
+import * as THREE from 'three';
+import { config } from './config.js';
+import { createEngine } from './core/engine.js';
+import { createInput } from './core/input.js';
+import { FloatingOrigin } from './core/floatingOrigin.js';
+import { createFreeCamera } from './camera/freeCamera.js';
+import { createOverlay } from './ui/overlay.js';
+import { createGroundGrid } from './world/groundGrid.js';
 
-const loadingOverlay = document.getElementById('loadingOverlay');
-const loadingText = document.getElementById('loadingText');
-const errorBanner = document.getElementById('errorBanner');
+const { renderer, scene, camera } = createEngine();
+const input = createInput(renderer.domElement);
+const overlay = createOverlay();
 
-const setLoading = (t) => loadingText && (loadingText.textContent = t);
-const hideLoading = () => loadingOverlay?.classList.add('hidden');
-function showError(message) {
-  if (!errorBanner) return;
-  errorBanner.textContent = message;
-  errorBanner.hidden = false;
+// Floating origin anchored at the start location. Streamed content (Phase 1+)
+// will register with this so the world stays centered on the player.
+const origin = new FloatingOrigin(config.start.lon, config.start.lat, config.rebaseThreshold);
+
+// Phase 0 placeholder world.
+const ground = origin.track(createGroundGrid());
+scene.add(ground);
+
+const cam = createFreeCamera(camera, input);
+
+const clock = new THREE.Clock();
+
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.1);
+  cam.update(dt);
+
+  // Keep the world centered on the camera while we have no vehicle yet.
+  origin.maybeRebase(camera.position.x, camera.position.z, [camera]);
+
+  const ll = origin.toLonLat(camera.position.x, camera.position.z);
+  overlay.setLocation(
+    `lat ${ll.lat.toFixed(5)}  lon ${ll.lon.toFixed(5)}\nalt ${camera.position.y.toFixed(0)} m`,
+  );
+
+  renderer.render(scene, camera);
+  overlay.tick(dt);
+  requestAnimationFrame(frame);
 }
+requestAnimationFrame(frame);
 
-async function boot() {
-  installGlobalGuards();
-  const { viewer, terrainName, imageryName, stylized } = await createViewer(setLoading);
-
-  // Auto-fallback if the imagery provider goes down (imagery mode only;
-  // stylized mode has no imagery layer to guard).
-  if (!stylized) installImageryResilience(viewer);
-
-  // Phase 1 — navigation & sharing.
-  createSearchBox(viewer);
-  createBookmarks(viewer);
-  syncUrlToCamera(viewer);
-
-  // Phase 2 — world detail (buildings, roads, water, trees) streamed per-region.
-  initRegionLoader(viewer).catch((err) => console.error('[main] region loader', err));
-
-  // Phase 3 & 4 — vehicles: fly, drive and sail the real world.
-  const vehicleManager = createVehicleManager(viewer);
-  createVehicleBar(vehicleManager, [
-    { label: 'Walk', icon: '🚶', cls: Walker },
-    { label: 'Plane', icon: '✈', cls: Plane },
-    { label: 'Car', icon: '🚗', cls: Car },
-    { label: 'Ship', icon: '🚢', cls: Ship },
-  ]);
-
-  // Phase 5 — a living world.
-  const environment = createEnvironment(viewer);
-  const birds = createBirds(viewer);
-  createSettings(viewer, environment, birds, { terrainName, imageryName });
-
-  // P3 — famous-places menu + in-world landmark labels (exploring hooks).
-  createPlaces(viewer);
-
-  // Reveal the globe once the first frame renders.
-  const remove = viewer.scene.postRender.addEventListener(() => {
-    hideLoading();
-    remove();
-    maybeShowOnboarding();
-  });
+// Expose for console debugging.
+if (config.debug) {
+  window.__world = { scene, camera, renderer, origin, THREE };
 }
-
-boot().catch((err) => {
-  console.error('[main] fatal boot error', err);
-  setLoading('Something went wrong loading the globe.');
-  showError(`Failed to start: ${err?.message ?? err}`);
-});
