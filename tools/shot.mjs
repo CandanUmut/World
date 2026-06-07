@@ -88,9 +88,14 @@ function bigLen(n) {
 const targets = await getJSON('/json');
 const page = targets.find((t) => t.type === 'page' && t.webSocketDebuggerUrl);
 if (!page) { console.error('no page target'); process.exit(1); }
+const EXPR = process.argv[5] || '';
 const ws = await wsConnect(page.webSocketDebuggerUrl);
 await ws.send(1, 'Page.enable');
 await new Promise((r) => setTimeout(r, WAIT));
+if (EXPR) {
+  await ws.send(3, 'Runtime.evaluate', { expression: EXPR, returnByValue: true });
+  await new Promise((r) => setTimeout(r, 1500));
+}
 const shot = await ws.send(2, 'Page.captureScreenshot', { format: 'png' });
 fs.writeFileSync(OUT, Buffer.from(shot.result.data, 'base64'));
 console.log('wrote', OUT, fs.statSync(OUT).size, 'bytes');

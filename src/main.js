@@ -7,7 +7,7 @@ import { FloatingOrigin } from './core/floatingOrigin.js';
 import { createFreeCamera } from './camera/freeCamera.js';
 import { createOverlay } from './ui/overlay.js';
 import { createTileStreamer } from './data/tileStreamer.js';
-import { createDebugTiles } from './world/debugTiles.js';
+import { createCityTiles } from './world/cityTiles.js';
 
 const { renderer, scene, camera } = createEngine();
 const input = createInput(renderer.domElement);
@@ -16,23 +16,23 @@ const overlay = createOverlay();
 // Floating origin anchored at the start location.
 const origin = new FloatingOrigin(config.start.lon, config.start.lat, config.rebaseThreshold);
 
-// A simple ground so the line work reads against a floor (replaced in Phase 2).
+// A neutral base ground so gaps between land-use fills read as urban ground.
 const ground = origin.track(new THREE.Mesh(
   new THREE.PlaneGeometry(20000, 20000),
-  new THREE.MeshStandardMaterial({ color: 0x3a4250, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0x8f928c, roughness: 1 }),
 ));
 ground.rotation.x = -Math.PI / 2;
-ground.position.y = -0.5;
+ground.position.y = -0.05;
 scene.add(ground);
 
-// --- OSM data feed (Phase 1) ---
+// --- Procedural city tiles (Phase 1 stream + Phase 2 geometry) ---
 const STREAM_Z = 14; // PMTiles maxzoom; buildings + roads present here
-const debugTiles = createDebugTiles(scene, origin);
+const cityTiles = createCityTiles(scene, origin);
 const streamer = createTileStreamer({
   url: config.pmtilesUrl,
   z: STREAM_Z,
-  onTile: (msg) => debugTiles.addTile(msg),
-  onDrop: (key) => debugTiles.dropTile(key),
+  onTile: (msg) => cityTiles.addTile(msg),
+  onDrop: (key) => cityTiles.dropTile(key),
   onReady: () => console.log('[tiles] archive ready'),
 });
 
@@ -66,7 +66,7 @@ function frame() {
   const s = streamer.stats();
   overlay.setLocation(
     `lat ${ll.lat.toFixed(5)}  lon ${ll.lon.toFixed(5)}\n` +
-    `alt ${camera.position.y.toFixed(0)} m  ·  tiles ${debugTiles.count} (${s.pending} loading)`,
+    `alt ${camera.position.y.toFixed(0)} m  ·  tiles ${cityTiles.count} (${s.pending} loading)`,
   );
 
   renderer.render(scene, camera);
@@ -76,5 +76,5 @@ function frame() {
 requestAnimationFrame(frame);
 
 if (config.debug) {
-  window.__world = { scene, camera, renderer, origin, streamer, debugTiles, THREE };
+  window.__world = { scene, camera, renderer, origin, streamer, cityTiles, cam, THREE };
 }

@@ -14,6 +14,7 @@ import { PMTiles } from 'pmtiles';
 import { VectorTile } from '@mapbox/vector-tile';
 import Protobuf from 'pbf';
 import { tileTopLeftMerc } from '../data/tiles.js';
+import { buildTileMeshes } from './geometry.js';
 
 let archive = null;
 
@@ -52,7 +53,7 @@ self.onmessage = async (e) => {
 function decodeTile(bytes, z, x, y) {
   const tile = new VectorTile(new Protobuf(bytes));
   const { mx: mx0, my: my0, size } = tileTopLeftMerc(z, x, y);
-  const transfer = [];
+  const transfer = []; // unused for raw rings; kept for helper signatures
 
   // Project a tile-local point [0..extent] (y down) -> mercator meters.
   const project = (extent, px, py) => [
@@ -130,7 +131,21 @@ function decodeTile(bytes, z, x, y) {
     parks: polygons('park', null),
   };
 
-  return { payload, transfer };
+  // Build stylized meshes in the worker (tile-center mercator as local origin).
+  const mcx = mx0 + size / 2;
+  const mcy = my0 - size / 2;
+  const meshes = buildTileMeshes(payload, mcx, mcy);
+
+  // Transfer only the final mesh buffers (raw rings stay and are GC'd).
+  const out = { center: meshes.center };
+  const meshTransfer = [];
+  for (const key of ['ground', 'roads', 'buildings']) {
+    const m = meshes[key];
+    if (!m) { out[key] = null; continue; }
+    out[key] = m;
+    meshTransfer.push(m.positions.buffer, m.normals.buffer, m.colors.buffer);
+  }
+  return { payload: out, transfer: meshTransfer };
 }
 
 function numOr(v, fallback) {

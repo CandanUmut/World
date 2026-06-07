@@ -48,5 +48,8 @@ export function createFreeCamera(camera, input) {
     );
   }
 
-  return { update };
+  return {
+    update,
+    setLook(y, p) { yaw = y; pitch = Math.max(-1.5, Math.min(1.5, p)); },
+  };
 }
