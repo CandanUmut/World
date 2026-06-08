@@ -44,6 +44,39 @@ html, body {
 
 #fps { color: var(--accent); font-weight: 600; }
 
+#minimap {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  width: 168px;
+  height: 168px;
+  border-radius: 50%;
+  z-index: 10;
+  pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+#speed {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  z-index: 10;
+  pointer-events: none;
+}
+#speed-val { font-size: 34px; font-weight: 700; color: var(--accent); line-height: 1; }
+#speed-unit { font-size: 12px; opacity: 0.75; }
+#gear {
+  margin-left: 6px;
+  font-size: 18px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
 #help {
   position: fixed;
   bottom: 12px;
@@ -56,6 +89,57 @@ html, body {
   max-width: 90vw;
   z-index: 10;
 }
+
+#controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  pointer-events: auto;
+}
+#controls select, #controls input[type="range"] {
+  font: inherit;
+  font-size: 12px;
+  color: var(--panel-fg);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 2px 4px;
+}
+#controls select option { color: #111; }
+#controls input[type="range"] { width: 96px; }
+
+#labels {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+  overflow: hidden;
+}
+.label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.8);
+  padding-left: 9px;
+}
+.label::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 50%;
+  width: 5px; height: 5px;
+  margin-top: -2.5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.label.k-place { color: #ffe08a; font-size: 14px; font-weight: 700; letter-spacing: 0.3px; }
+.label.k-street { color: #e7eefc; font-weight: 500; }
+.label.k-shop { color: #8fe0ff; }
+.label.k-food { color: #ffb877; }
+.label.k-civic { color: #b8ffcb; }
+.label.k-poi { color: #cfd6e2; font-weight: 500; }
 
 #attribution {
   position: fixed;

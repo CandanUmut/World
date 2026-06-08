@@ -111,29 +111,71 @@ function sinkToBuffers(s) {
   };
 }
 
+// A sink that also carries UVs (for textured building walls).
+function makeSinkUV() {
+  return { pos: [], nor: [], col: [], uv: [] };
+}
+function pushTriUV(s, ax, ay, az, bx, by, bz, cx, cy, cz, color,
+                   au, av, bu, bv, cu, cv) {
+  const ux = bx - ax, uy = by - ay, uz = bz - az;
+  const vx = cx - ax, vy = cy - ay, vz = cz - az;
+  let nx = uy * vz - uz * vy;
+  let ny = uz * vx - ux * vz;
+  let nz = ux * vy - uy * vx;
+  const len = Math.hypot(nx, ny, nz) || 1;
+  nx /= len; ny /= len; nz /= len;
+  s.pos.push(ax, ay, az, bx, by, bz, cx, cy, cz);
+  s.nor.push(nx, ny, nz, nx, ny, nz, nx, ny, nz);
+  const [r, g, bl] = color;
+  s.col.push(r, g, bl, r, g, bl, r, g, bl);
+  s.uv.push(au, av, bu, bv, cu, cv);
+}
+function sinkUVToBuffers(s) {
+  if (!s.pos.length) return null;
+  return {
+    positions: new Float32Array(s.pos),
+    normals: new Float32Array(s.nor),
+    colors: new Float32Array(s.col),
+    uvs: new Float32Array(s.uv),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Per-feature builders.
 // ---------------------------------------------------------------------------
 
-/** Extrude a polygon ring (local x,z) into a solid prism base..top. */
-function extrudeRing(s, lx, lz, base, top, color, roofColor) {
+// Facade texture footprint in meters (one repeat of the window atlas).
+const FACADE_M_X = 16; // window columns per repeat
+const FACADE_M_Y = 14; // floors per repeat
+
+/**
+ * Extrude a polygon ring (local x,z): flat roof cap into `roofSink` (vertex
+ * color only) and textured walls into `wallSink` (with UVs so a tiling window
+ * facade aligns to real-world meters). `uOff` phase-shifts the window pattern
+ * per building so no two facades line up.
+ */
+function extrudeRingSplit(wallSink, roofSink, lx, lz, base, top, color, roofColor, uOff) {
   const n = lx.length;
   if (n < 3) return;
-  // Roof cap via earcut on the 2D (x,z) outline.
+  // Roof cap.
   const flat = new Array(n * 2);
   for (let i = 0; i < n; i++) { flat[i * 2] = lx[i]; flat[i * 2 + 1] = lz[i]; }
   const tris = earcut(flat, null, 2);
   for (let i = 0; i < tris.length; i += 3) {
     const a = tris[i], b = tris[i + 1], c = tris[i + 2];
-    pushTri(s, lx[a], top, lz[a], lx[b], top, lz[b], lx[c], top, lz[c], roofColor);
+    pushTri(roofSink, lx[a], top, lz[a], lx[b], top, lz[b], lx[c], top, lz[c], roofColor);
   }
-  // Walls.
+  // Walls with running-perimeter U and height V.
+  const vb = base / FACADE_M_Y, vt = top / FACADE_M_Y;
+  let u = uOff;
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n;
     const ax = lx[i], az = lz[i], bx = lx[j], bz = lz[j];
-    // quad (a_base, b_base, b_top, a_top) as two tris
-    pushTri(s, ax, base, az, bx, base, bz, bx, top, bz, color);
-    pushTri(s, ax, base, az, bx, top, bz, ax, top, az, color);
+    const segLen = Math.hypot(bx - ax, bz - az);
+    const ua = u / FACADE_M_X, ub2 = (u + segLen) / FACADE_M_X;
+    pushTriUV(wallSink, ax, base, az, bx, base, bz, bx, top, bz, color, ua, vb, ub2, vb, ub2, vt);
+    pushTriUV(wallSink, ax, base, az, bx, top, bz, ax, top, az, color, ua, vb, ub2, vt, ua, vt);
+    u += segLen;
   }
 }
 
@@ -270,19 +312,58 @@ export function buildTileMeshes(payload, mcx, mcy, opts = {}) {
   const sortedRoads = (payload.roads || [])
     .filter((r) => r.klass !== 'rail') // skip rail clutter for now
     .sort((a, b) => roadStyle(b.klass).w - roadStyle(a.klass).w);
+  // Road centerlines for gameplay (traffic, streetlights, labels): packed
+  // points + per-road meta. Drivable classes only.
+  const DRIVABLE = new Set(['motorway', 'trunk', 'primary', 'secondary',
+    'tertiary', 'minor', 'residential', 'service', 'living_street', 'unclassified']);
+  const roadPts = [];
+  const roadMeta = [];
   for (const r of sortedRoads) {
     const st = roadStyle(r.klass);
     const { lx, lz } = ringToLocal(r.pts);
     ribbon(roads, lx, lz, st.w / 2, 0.07, st.c);
+    if (lod <= 1 && DRIVABLE.has(r.klass) && lx.length >= 2) {
+      const start = roadPts.length / 2;
+      for (let i = 0; i < lx.length; i++) roadPts.push(lx[i], lz[i]);
+      roadMeta.push({ klass: r.klass, oneway: !!r.oneway, w: st.w, start, count: lx.length });
+    }
   }
+  // Intersection nodes: drivable road vertices shared by >=3 incidences.
+  let nodes = null;
+  if (roadMeta.length) {
+    const counts = new Map();
+    for (const r of roadMeta) {
+      for (let i = r.start; i < r.start + r.count; i++) {
+        const key = `${Math.round(roadPts[i * 2])},${Math.round(roadPts[i * 2 + 1])}`;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+    }
+    const ns = [];
+    for (const [key, c] of counts) {
+      if (c < 3) continue;
+      const [x, z] = key.split(',');
+      ns.push(+x, +z);
+      if (ns.length / 2 >= 60) break;
+    }
+    if (ns.length) nodes = new Float32Array(ns);
+  }
+  const roadGraph = roadMeta.length
+    ? { pts: new Float32Array(roadPts), meta: roadMeta, nodes }
+    : null;
 
   // --- buildings (LOD: drop short buildings on far tiles; cap to tallest N) ---
-  const buildings = makeSink();
+  const walls = makeSinkUV();
+  const roofs = makeSink();
   const minH = LOD_MIN_HEIGHT[Math.min(lod, LOD_MIN_HEIGHT.length - 1)];
   let blds = (payload.buildings || []).filter((b) => !b.hide3d && (b.height || 8) >= minH);
   if (blds.length > maxBuildings) {
     blds = blds.sort((a, b) => (b.height || 0) - (a.height || 0)).slice(0, maxBuildings);
   }
+  // Footprints for collision are only needed on near tiles (where the car is).
+  const emitFootprints = lod <= 1;
+  const footCoords = [];
+  const footSizes = [];
+
   let seed = 1;
   for (const b of blds) {
     const base = Math.max(0, b.minHeight || 0);
@@ -296,18 +377,73 @@ export function buildTileMeshes(payload, mcx, mcy, opts = {}) {
       }
       const color = buildingColor(b, top, seed);
       const roofColor = [color[0] * 0.82, color[1] * 0.82, color[2] * 0.85];
-      extrudeRing(buildings, lx, lz, base, top, color, roofColor);
+      const uOff = rand01(seed * 2.3) * FACADE_M_X;
+      extrudeRingSplit(walls, roofs, lx, lz, base, top, color, roofColor, uOff);
+      if (emitFootprints && lx.length >= 3) {
+        footSizes.push(lx.length);
+        for (let i = 0; i < lx.length; i++) footCoords.push(lx[i], lz[i]);
+      }
       seed += 1;
     }
+  }
+
+  const footprints = footSizes.length
+    ? { coords: new Float32Array(footCoords), sizes: new Uint16Array(footSizes) }
+    : null;
+
+  // --- labels (names): places, POIs/shops, street names ---
+  let labels = null;
+  if (lod <= 2) {
+    const o = { x: 0, z: 0 };
+    const ls = [];
+    for (const p of payload.places || []) {
+      if (!p.name) continue;
+      toLocal(p.mx, p.my, o);
+      ls.push({ x: o.x, z: o.z, name: p.name, kind: 'place', rank: placeRank(p.klass) });
+    }
+    for (const p of payload.pois || []) {
+      if (!p.name) continue;
+      toLocal(p.mx, p.my, o);
+      ls.push({ x: o.x, z: o.z, name: p.name, kind: poiKind(p.klass), rank: 6 });
+    }
+    for (const r of payload.roadNames || []) {
+      if (!r.name || !r.pts || r.pts.length < 4) continue;
+      const mid = (Math.floor(r.pts.length / 4)) * 2; // middle vertex
+      toLocal(r.pts[mid], r.pts[mid + 1], o);
+      ls.push({ x: o.x, z: o.z, name: r.name, kind: 'street', rank: 8 });
+    }
+    ls.sort((a, b) => a.rank - b.rank);
+    if (ls.length) labels = ls.slice(0, 48);
   }
 
   return {
     center: { mcx, mcy },
     ground: sinkToBuffers(ground),
     roads: sinkToBuffers(roads),
-    buildings: sinkToBuffers(buildings),
+    buildingsWalls: sinkUVToBuffers(walls),
+    buildingsRoofs: sinkToBuffers(roofs),
     trees: trees && trees.length ? trees : null,
+    footprints,
+    roadGraph,
+    labels,
   };
+}
+
+function placeRank(klass) {
+  switch (klass) {
+    case 'city': return 0;
+    case 'town': return 1;
+    case 'suburb': case 'borough': return 2;
+    case 'neighbourhood': case 'quarter': return 3;
+    case 'village': case 'hamlet': return 4;
+    default: return 5;
+  }
+}
+function poiKind(klass) {
+  if (['restaurant', 'fast_food', 'cafe', 'bar', 'pub', 'food'].includes(klass)) return 'food';
+  if (['shop', 'supermarket', 'convenience', 'clothing_store', 'mall', 'department_store'].includes(klass)) return 'shop';
+  if (['hospital', 'police', 'fire_station', 'school', 'university'].includes(klass)) return 'civic';
+  return 'poi';
 }
 
 /**

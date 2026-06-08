@@ -111,6 +111,23 @@ function decodeTile(bytes, z, x, y, lod) {
     return out;
   }
 
+  // --- point layers: a single representative point per feature ---
+  function points(layerName, mapProps) {
+    const layer = tile.layers[layerName];
+    if (!layer) return [];
+    const out = [];
+    const ext = layer.extent;
+    for (let i = 0; i < layer.length; i++) {
+      const f = layer.feature(i);
+      const geom = f.loadGeometry();
+      const pt = geom[0] && geom[0][0];
+      if (!pt) continue;
+      const m = project(ext, pt.x, pt.y);
+      out.push({ mx: m[0], my: m[1], ...(mapProps ? mapProps(f.properties) : {}) });
+    }
+    return out;
+  }
+
   const payload = {
     buildings: polygons('building', (p) => ({
       height: numOr(p.render_height, 8),
@@ -129,6 +146,9 @@ function decodeTile(bytes, z, x, y, lod) {
     landuse: polygons('landuse', (p) => ({ klass: p.class || null })),
     landcover: polygons('landcover', (p) => ({ klass: p.class || null })),
     parks: polygons('park', null),
+    places: points('place', (p) => ({ name: p.name || p['name:en'] || null, klass: p.class || null })),
+    pois: points('poi', (p) => ({ name: p.name || p['name:en'] || null, klass: p.class || null, subclass: p.subclass || null })),
+    roadNames: lines('transportation_name', (p) => ({ name: p.name || p['name:en'] || null })),
   };
 
   // Build stylized meshes in the worker (tile-center mercator as local origin).
@@ -139,14 +159,33 @@ function decodeTile(bytes, z, x, y, lod) {
   // Transfer only the final mesh buffers (raw rings stay and are GC'd).
   const out = { center: meshes.center };
   const meshTransfer = [];
-  for (const key of ['ground', 'roads', 'buildings']) {
+  for (const key of ['ground', 'roads', 'buildingsRoofs']) {
     const m = meshes[key];
     if (!m) { out[key] = null; continue; }
     out[key] = m;
     meshTransfer.push(m.positions.buffer, m.normals.buffer, m.colors.buffer);
   }
+  // Walls carry an extra UV buffer for the facade texture.
+  out.buildingsWalls = meshes.buildingsWalls || null;
+  if (meshes.buildingsWalls) {
+    const w = meshes.buildingsWalls;
+    meshTransfer.push(w.positions.buffer, w.normals.buffer, w.colors.buffer, w.uvs.buffer);
+  }
   out.trees = meshes.trees;
   if (meshes.trees) meshTransfer.push(meshes.trees.buffer);
+
+  // Building footprints (near tiles only) for car collision on the main thread.
+  out.footprints = meshes.footprints || null;
+  if (meshes.footprints) {
+    meshTransfer.push(meshes.footprints.coords.buffer, meshes.footprints.sizes.buffer);
+  }
+  // Road centerlines (near tiles) for traffic, streetlights, labels.
+  out.roadGraph = meshes.roadGraph || null;
+  if (meshes.roadGraph) {
+    meshTransfer.push(meshes.roadGraph.pts.buffer);
+    if (meshes.roadGraph.nodes) meshTransfer.push(meshes.roadGraph.nodes.buffer);
+  }
+  out.labels = meshes.labels || null; // plain objects (names), cloned not transferred
   return { payload: out, transfer: meshTransfer };
 }
 
