@@ -1,30 +1,40 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-    />
-    <meta
-      name="description"
-      content="Explore the real Earth — real terrain, satellite imagery and OpenStreetMap data. Free & open, built on CesiumJS."
-    />
-    <title>Real Earth — Free &amp; Open</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="description" content="Drive a stylized version of the real planet — built procedurally from OpenStreetMap, on Three.js." />
+    <title>World Drive — stylized real-world driving</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <div id="cesiumContainer"></div>
-
-    <div id="loadingOverlay">
-      <div class="loading-inner">
-        <div class="spinner" aria-hidden="true"></div>
-        <p id="loadingText">Loading the real Earth…</p>
+    <div id="app"></div>
+    <div id="labels"></div>
+    <div id="hud">
+      <div id="fps" class="hud-panel">–</div>
+      <div id="loc" class="hud-panel">locating…</div>
+      <div id="controls" class="hud-panel">
+        <select id="goto" title="Drive here">
+          <option value="">go to…</option>
+          <option value="-73.9857,40.7484">Times Square</option>
+          <option value="-73.9665,40.7812">Central Park</option>
+          <option value="-73.9857,40.7580">Rockefeller Center</option>
+          <option value="-74.0445,40.6892">Statue of Liberty</option>
+          <option value="-73.9969,40.7061">Brooklyn Bridge</option>
+          <option value="-73.9772,40.7527">Grand Central</option>
+          <option value="-74.0134,40.7127">World Trade Center</option>
+        </select>
+        <input id="time-slider" type="range" min="0" max="1000" value="620" title="Time of day" />
       </div>
     </div>
-
-    <div id="errorBanner" role="alert" hidden></div>
-
+    <canvas id="minimap"></canvas>
+    <div id="speed" class="hud-panel">
+      <span id="speed-val">0</span><span id="speed-unit">km/h</span><span id="gear">D</span>
+    </div>
+    <div id="attribution">© OpenStreetMap contributors</div>
+    <div id="help" class="hud-panel">
+      <b>Drive</b> · W/S or ↑/↓ accel/brake · A/D or ←/→ steer · Space drift · <b>C</b> camera · <b>M</b> map
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

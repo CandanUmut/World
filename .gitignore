@@ -4,6 +4,10 @@ node_modules/
 # Build output
 dist/
 
+# Baked map data (large; provided locally, not committed)
+*.pmtiles
+public/*.pmtiles
+
 # Local env / secrets
 .env
 .env.local
